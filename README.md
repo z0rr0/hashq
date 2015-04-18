@@ -1,6 +1,6 @@
 ## hashq
 
-[![GoDoc](https://godoc.org/github.com/z0rr0/hashq?status.svg)](https://godoc.org/github.com/z0rr0/hashq) [![LGPL License](http://img.shields.io/badge/license-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0.txt)
+[![GoDoc](https://godoc.org/github.com/z0rr0/hashq?status.svg)](https://godoc.org/github.com/z0rr0/hashq) [![LGPL License](http://img.shields.io/badge/license-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0.txt) [![Build Status](https://travis-ci.org/z0rr0/hashq.svg?branch=master)](https://travis-ci.org/z0rr0/hashq)
 
 Go package to control incoming tasks that need to use some shared resources.
 
