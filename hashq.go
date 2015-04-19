@@ -141,6 +141,7 @@ func Get() *Resource {
     return res
 }
 
+// Stat print statistics for debug mode.
 func Stat() {
     loggerDebug.Println("Stat")
     for i, res := range SharedMap {
@@ -152,13 +153,7 @@ func Stat() {
 func (s *Speed) inc() {
     s.Sum, s.Last = s.Sum + 1, time.Now().UnixNano()
 }
-// Avg returns an average speed of incoming requests.
-// func (s *Speed) Avg() float64 {
-//     if s.Last == s.Start {
-//         return 0
-//     }
-//     return s.Sum / float64(s.Last - s.Start)
-// }
+
 // Freq returns an average frequency of incoming requests
 func (s *Speed) Freq() int64 {
     if s.Sum == 0 {
@@ -190,7 +185,7 @@ func (res *Resource) Lock() {
     res.mutex.RLock()
 }
 
-// Lock implements read-unlock for a resource.
+// Unlock implements read-unlock for a resource.
 func (res *Resource) Unlock() {
     res.touch()
     res.mutex.RUnlock()
@@ -203,7 +198,7 @@ func (res *Resource) touch() {
 
 // TryOpen calls Open() method of shared resource only once.
 func (res *Resource) TryOpen() (Shared, error) {
-    var err error = nil
+    var err error
     open := func() {
         loggerDebug.Println("called TryOpen()")
         res.Pt, err = res.Pt.Open()

@@ -32,11 +32,11 @@ var (
 )
 
 type Connection struct {
-    Id     int64
+    ID     int64
     Active bool
 }
 type Request struct {
-    Id      int64
+    ID      int64
     Con     *Connection
     Created time.Time
 }
@@ -57,7 +57,7 @@ func (con *Connection) Open() (Shared, error) {
     return c, nil
 }
 func (con *Connection) Close() {
-    con.Id = 0
+    con.ID = 0
     con.Active = false
 }
 func (req *Request) Run(t *testing.T, result chan Result) {
@@ -82,7 +82,7 @@ func (req *Request) Run(t *testing.T, result chan Result) {
     }
     salt := time.Duration(rand.Int63n(maxReqTime)) * time.Millisecond
     time.Sleep(minReqTime + salt)
-    result<-Result{req.Id * con.Id, nil}
+    result<-Result{req.ID * con.ID, nil}
 }
 func ReqGenerator(req chan Request) {
     rand.Seed(time.Now().UnixNano())
