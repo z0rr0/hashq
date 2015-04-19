@@ -26,9 +26,10 @@ var (
     minReqTime = time.Millisecond * 5
     maxReqTime int64 = 30
 
-    maxRequests int = 50
     minRequestDelay = time.Millisecond * 5
     maxRequestDelay int64 = 5
+
+    maxRequests = 50
 )
 
 type Connection struct {
