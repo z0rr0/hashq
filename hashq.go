@@ -8,6 +8,7 @@
 package hashq
 
 import (
+    "fmt"
     "io/ioutil"
     "log"
     "os"
@@ -19,6 +20,7 @@ var (
     // SharedMap is an array of shared resources wrappers.
     SharedMap []*Resource
 
+    initialized bool
     // emptyPt is an example of default Shared object
     emptyPt Shared
     // cleanPeriod is an interval between attempts to clean resources.
@@ -79,7 +81,19 @@ func Debug(debug bool) {
 // spch - a parameter to check time interval between incoming requests;
 // cleaner - an interval between attempts to clean resources;
 // older - a resource can be considered obsolete after this interval.
-func Init(share Shared, size int64, spch uint64, cleaner, older time.Duration) {
+func Init(share Shared, size int64, spch uint64, cleaner, older time.Duration) error {
+    var err error
+    switch {
+        case share == nil:
+            err = fmt.Errorf("can't initializes using nil pointer")
+        case size < 1:
+            err = fmt.Errorf("bad size of shared array")
+        case spch < 1:
+            err = fmt.Errorf("bad parameter for frequency correction")
+    }
+    if err != nil {
+        return err
+    }
     emptyPt = share
     maxShared, speedCheck, cleanPeriod, olderPeriod = size, spch, cleaner, older
     SharedMap = make([]*Resource, maxShared)
@@ -97,6 +111,8 @@ func Init(share Shared, size int64, spch uint64, cleaner, older time.Duration) {
         }
     }()
     InitSpeed()
+    initialized = true
+    return err
 }
 
 // InitSpeed initializes new internal Speed structure.
@@ -108,6 +124,9 @@ func InitSpeed() {
 
 // Clean resets unused resources. Only this method can delete shared pointers.
 func Clean() {
+    if !initialized {
+        return
+    }
     loggerDebug.Println("start Clean()")
     defer loggerDebug.Println("end Clean()")
 
@@ -134,11 +153,14 @@ func genHash() int64 {
 }
 
 // Get returns a shared resource.
-func Get() *Resource {
+func Get() (*Resource, error) {
+    if !initialized {
+        return nil, fmt.Errorf("configuration is not initialized")
+    }
     idx := genHash()
     res := SharedMap[idx]
     loggerDebug.Printf("Get() returned [%v]=%v", idx, &SharedMap[idx])
-    return res
+    return res, nil
 }
 
 // Stat print statistics for debug mode.

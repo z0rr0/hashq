@@ -64,7 +64,10 @@ func (con *Connection) Close() {
 func (req *Request) Run(t *testing.T, result chan Result) {
     rand.Seed(time.Now().UnixNano())
     // it is some shared resource
-    res := Get()
+    res, err := Get()
+    if err != nil {
+        t.Errorf("wrong Get() response")
+    }
     res.Lock()
     loggerDebug.Printf("run start for %v\n", &res)
     defer func() {
@@ -111,10 +114,28 @@ func TestDebug(t *testing.T) {
     }
 }
 
+func TestGet(t *testing.T) {
+    if _, err := Get(); err == nil {
+        t.Errorf("accept not initialized Get()")
+    }
+    Clean()
+}
+
 func TestInit(t *testing.T) {
     Debug(true)
     empty := &Connection{}
-    Init(empty, sharedNum, checkFreq, cleanerTime, olderTime)
+    if err := Init(nil, sharedNum, checkFreq, cleanerTime, olderTime); err == nil {
+        t.Errorf("accept wrong parameters #1")
+    }
+    if err := Init(empty, 0, checkFreq, cleanerTime, olderTime); err == nil {
+        t.Errorf("accept wrong parameters #2")
+    }
+    if err := Init(empty, sharedNum, 0, cleanerTime, olderTime); err == nil {
+        t.Errorf("accept wrong parameters #3")
+    }
+    if err := Init(empty, sharedNum, checkFreq, cleanerTime, olderTime); err != nil {
+        t.Errorf("incorrect initialization")
+    }
 
     finish := make(chan bool)
     resultCh := make(chan Result)
