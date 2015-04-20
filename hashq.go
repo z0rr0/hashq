@@ -5,6 +5,10 @@
 // Package hashq implements methods to control
 // incoming tasks that need to use some shared resources.
 //
+// It contains a storage for some resources that can be opened and closed
+// to don't call these procedures every time. An opened item will not be
+// closed immediately, so it can be used for new calls.
+// Unused elements will be closed automatically after needed time.
 package hashq
 
 import (
@@ -188,7 +192,7 @@ func (s *Speed) Check() bool {
     return (uint64(s.Sum) % speedCheck) == 1
 }
 
-// Clean reset an unused resource and "close" shared object.
+// Clean resets an unused resource and "closes" shared object.
 func (res *Resource) Clean(i int) {
     res.mutex.Lock()
     defer res.mutex.Unlock()

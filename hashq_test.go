@@ -29,7 +29,7 @@ var (
     minRequestDelay = time.Millisecond * 5
     maxRequestDelay int64 = 5
 
-    maxRequests = 50
+    maxRequests = 100
 )
 
 type Connection struct {
@@ -166,5 +166,6 @@ func TestInit(t *testing.T) {
 
     done := <-finish
     close(resultCh)
+    time.Sleep(cleanerTime)
     t.Log("all done", done)
 }

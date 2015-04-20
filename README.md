@@ -4,7 +4,9 @@
 
 Go package to control incoming tasks that need to use some shared resources.
 
-For example, it can be used if there are many incoming requests per second and every one should read some data from database, then it's inefficient to open/close a connection every time. So some shared connections pool can be allocated and used, but we should control it - safe open new and close unused element.
+It contains a storage for some resources that can be opened and closed to don't call these procedures every time. An opened item will not be closed immediately, so it can be used for new calls. Unused elements will be closed automatically after needed time.
+
+For example, it can be used if there are many incoming requests and every one should read some data from database, then it's inefficient to open/close a connection every time. So, some shared connections pool can be allocated and used, and we shouldn't control it, **hashq** will do it - thread safe open and close calls.
 
 ### Dependencies
 
