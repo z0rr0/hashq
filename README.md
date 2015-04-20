@@ -8,6 +8,44 @@ It contains a storage for some resources that can be opened and closed to don't 
 
 For example, it can be used if there are many incoming requests and every one should read some data from database, then it's inefficient to open/close a connection every time. So, some shared connections pool can be allocated and used, and we shouldn't control it, **hashq** will do it - thread safe open and close calls.
 
+```go
+var (
+    sharedNum int64 = 16           // storage size
+    checkFreq uint64 = 10          // recheck a frequency every checkFreq calls
+    cleanerTime = time.Second * 30 // Clean() function will be called after this period
+    olderTime = time.Second * 10   // connection can be closed after this period
+)
+
+type Connection struct {
+	// some fields
+}
+func (con *Connection) Open() (Shared, error) {
+	// ...
+}
+func (con *Connection) Close(){
+	// ...
+}
+
+empty := &Connection{}
+if err := Init(empty, sharedNum, checkFreq, cleanerTime, olderTime); err == nil {
+    panic("incorrect initialization")
+}
+
+// get an item from storage and open it if it's needed
+res, err := Get()
+if err != nil {
+    panic("can't get element")  // any error handling can be used instead panic()
+}
+res.Lock()                      // any other goroutine can call Lock()
+defer res.Unlock()              // Clean() can check an close "old" unlocked items
+sharedCon, err := res.TryOpen() // Open() will be called only once
+if err != nil {
+    panic("can't open resource")
+}
+con := sharedCon.(*Connection)
+// use gotten Connection element
+```
+
 ### Dependencies
 
 Standard [Go library](http://golang.org/pkg/).
