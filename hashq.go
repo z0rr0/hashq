@@ -43,10 +43,7 @@ type HashQ struct {
 
 // Len returns a length of hash storage.
 func (hq *HashQ) Len() int {
-    if hq != nil {
-        return len(hq.sharedMap)
-    }
-    return 0
+    return len(hq.sharedMap)
 }
 
 // Shared is an interface of a shared resource.
@@ -125,9 +122,6 @@ func New(share Shared, size int64, spch uint64, cleaner, older time.Duration) (*
 
 // Clean resets unused resources. Only this method can delete shared pointers.
 func (hq *HashQ) Clean() {
-    if hq == nil {
-        return
-    }
     loggerDebug.Println("start Clean()")
     defer loggerDebug.Println("end Clean()")
 
@@ -179,9 +173,9 @@ func (s *Speed) inc() {
 
 // Freq returns an average frequency of incoming requests
 func (s *Speed) Freq() int64 {
-    if s.Sum == 0 {
-        return 0
-    }
+    // if s.Sum == 0 {
+    //     return 0
+    // }
     return (s.Last - s.Start) / int64(s.Sum)
 }
 

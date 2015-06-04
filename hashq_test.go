@@ -42,6 +42,7 @@ type Request struct {
     Created time.Time
 }
 type Result struct {
+    ID     int64
     Answer int64
     Err    error
 }
@@ -51,7 +52,7 @@ func (con *Connection) Open() (Shared, error) {
     salt := time.Duration(rand.Int63n(maxOpenTime)) * time.Millisecond
     time.Sleep(minOpenTime + salt)
 
-    c := &Connection{rand.Int63n(maxOpenValue), true}
+    c := &Connection{rand.Int63n(maxOpenValue) + 1, true}
     if waitError {
         return c, fmt.Errorf("expected error")
     }
@@ -77,7 +78,7 @@ func (req *Request) Run(t *testing.T, hq *HashQ, result chan Result) {
 
     sharedCon, err := res.TryOpen()
     if err != nil {
-        result <- Result{0, err}
+        result <- Result{0, 0, err}
         return
     }
     con := sharedCon.(*Connection)
@@ -86,7 +87,8 @@ func (req *Request) Run(t *testing.T, hq *HashQ, result chan Result) {
     }
     salt := time.Duration(rand.Int63n(maxReqTime)) * time.Millisecond
     time.Sleep(minReqTime + salt)
-    result <- Result{req.ID * con.ID, nil}
+    // loggerDebug.Printf("send to channel: %v-%v", req.ID, con.ID)
+    result <- Result{req.ID, req.ID * con.ID, nil}
 }
 func ReqGenerator(req chan Request) {
     rand.Seed(time.Now().UnixNano())
@@ -146,11 +148,12 @@ func TestInit(t *testing.T) {
     go func() {
         i := 0
         for result := range resultCh {
+            // loggerDebug.Printf("result gotten: %v", result)
             if result.Err != nil {
                 t.Errorf("result error: %v", result.Err)
             }
             if result.Answer == 0 {
-                t.Errorf("incorrect answer")
+                t.Errorf("incorrect answer: %v", result)
             }
             i++
             if i >= maxRequests {
