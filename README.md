@@ -27,12 +27,13 @@ func (con *Connection) Close(){
 }
 
 empty := &Connection{}
-if err := Init(empty, sharedNum, checkFreq, cleanerTime, olderTime); err == nil {
+hq, err := New(empty, sharedNum, checkFreq, cleanerTime, olderTime);
+if err == nil {
     panic("incorrect initialization")
 }
 
 // get an item from storage and open it if it's needed
-res, err := Get()
+res, err := hq.Get()
 if err != nil {
     panic("can't get element")  // any error handling can be used instead panic()
 }
