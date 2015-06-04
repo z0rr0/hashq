@@ -12,21 +12,21 @@ import (
 )
 
 var (
-    sharedNum int64 = 4
-    checkFreq uint64 = 5
-    cleanerTime = time.Millisecond * 30
-    olderTime = time.Millisecond * 20
+    sharedNum   int64  = 4
+    checkFreq   uint64 = 5
+    cleanerTime        = time.Millisecond * 30
+    olderTime          = time.Millisecond * 20
 
-    minOpenTime = time.Millisecond * 10
+    minOpenTime       = time.Millisecond * 10
     maxOpenTime int64 = 5
 
     maxOpenValue int64 = 100
-    waitError bool
+    waitError    bool
 
-    minReqTime = time.Millisecond * 5
+    minReqTime       = time.Millisecond * 5
     maxReqTime int64 = 30
 
-    minRequestDelay = time.Millisecond * 5
+    minRequestDelay       = time.Millisecond * 5
     maxRequestDelay int64 = 5
 
     maxRequests = 100
@@ -61,10 +61,10 @@ func (con *Connection) Close() {
     con.ID = 0
     con.Active = false
 }
-func (req *Request) Run(t *testing.T, result chan Result) {
+func (req *Request) Run(t *testing.T, hq *HashQ, result chan Result) {
     rand.Seed(time.Now().UnixNano())
     // it is some shared resource
-    res, err := Get()
+    res, err := hq.Get()
     if err != nil {
         t.Errorf("wrong Get() response")
     }
@@ -77,7 +77,7 @@ func (req *Request) Run(t *testing.T, result chan Result) {
 
     sharedCon, err := res.TryOpen()
     if err != nil {
-        result<-Result{0, err}
+        result <- Result{0, err}
         return
     }
     con := sharedCon.(*Connection)
@@ -86,7 +86,7 @@ func (req *Request) Run(t *testing.T, result chan Result) {
     }
     salt := time.Duration(rand.Int63n(maxReqTime)) * time.Millisecond
     time.Sleep(minReqTime + salt)
-    result<-Result{req.ID * con.ID, nil}
+    result <- Result{req.ID * con.ID, nil}
 }
 func ReqGenerator(req chan Request) {
     rand.Seed(time.Now().UnixNano())
@@ -115,25 +115,27 @@ func TestDebug(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-    if _, err := Get(); err == nil {
+    hq := &HashQ{}
+    if _, err := hq.Get(); err == nil {
         t.Errorf("accept not initialized Get()")
     }
-    Clean()
+    hq.Clean()
 }
 
 func TestInit(t *testing.T) {
+    var err error
     Debug(true)
-    empty := &Connection{}
-    if err := Init(nil, sharedNum, checkFreq, cleanerTime, olderTime); err == nil {
+    hq, empty := &HashQ{}, &Connection{}
+    if _, err = New(nil, sharedNum, checkFreq, cleanerTime, olderTime); err == nil {
         t.Errorf("accept wrong parameters #1")
     }
-    if err := Init(empty, 0, checkFreq, cleanerTime, olderTime); err == nil {
+    if _, err = New(empty, 0, checkFreq, cleanerTime, olderTime); err == nil {
         t.Errorf("accept wrong parameters #2")
     }
-    if err := Init(empty, sharedNum, 0, cleanerTime, olderTime); err == nil {
+    if _, err = New(empty, sharedNum, 0, cleanerTime, olderTime); err == nil {
         t.Errorf("accept wrong parameters #3")
     }
-    if err := Init(empty, sharedNum, checkFreq, cleanerTime, olderTime); err != nil {
+    if hq, err = New(empty, sharedNum, checkFreq, cleanerTime, olderTime); err != nil {
         t.Errorf("incorrect initialization")
     }
 
@@ -161,7 +163,7 @@ func TestInit(t *testing.T) {
     go ReqGenerator(reqCh)
     for req := range reqCh {
         reqpt := &req
-        go reqpt.Run(t, resultCh)
+        go reqpt.Run(t, hq, resultCh)
     }
 
     done := <-finish

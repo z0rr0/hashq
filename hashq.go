@@ -20,31 +20,34 @@ import (
     "time"
 )
 
-var (
-    // SharedMap is an array of shared resources wrappers.
-    SharedMap []*Resource
+const (
+    incomeFreqTotal int64 = 1000000 // milliseconds
+)
 
-    initialized bool
-    // emptyPt is an example of default Shared object
-    emptyPt Shared
-    // cleanPeriod is an interval between attempts to clean resources.
-    cleanPeriod = time.Second * 60
-    // olderPeriod is an interval after wich a resource can be considered obsolete.
-    olderPeriod = time.Second * 30
-    // maxShared is a number of shared resources.
-    maxShared int64 = 4
-    // speedCheck is parameter to check time interval between incoming requests.
-    speedCheck uint64 = 10
-    // curSpeed is a speed structure of incoming requests.
-    curSpeed *Speed
-    // incomeFreq is initialize value of incoming requests.
-    // It will be corrected after the first one.
-    incomeFreq int64 = 1000000 // milliseconds
+var (
     // loggerError implements error logger.
     loggerError = log.New(os.Stderr, "ERROR [hashq]: ", log.Ldate|log.Ltime|log.Lshortfile)
     // loggerDebug implements debug logger, it's disabled by default.
     loggerDebug = log.New(ioutil.Discard, "DEBUG [hashq]: ", log.Ldate|log.Lmicroseconds|log.Lshortfile)
 )
+
+// HashQ is a hash storage.
+type HashQ struct {
+    sharedMap   []*Resource   // an array of shared resources wrappers
+    emptyPt     Shared        // an example of default Shared object
+    maxShared   int64         // a number of shared resources
+    cleanPeriod time.Duration // an interval between attempts to clean resources
+    olderPeriod time.Duration // an interval after wich a resource can be considered obsolete
+    curSpeed    *Speed        // a speed structure of incoming requests
+}
+
+// Len returns a length of hash storage.
+func (hq *HashQ) Len() int {
+    if hq != nil {
+        return len(hq.sharedMap)
+    }
+    return 0
+}
 
 // Shared is an interface of a shared resource.
 type Shared interface {
@@ -65,9 +68,11 @@ type Resource struct {
 // Speed is structure to calculate average speed and frequency of incoming requests.
 // It uses probabilistic values, because this works without any locks.
 type Speed struct {
-    Sum   float64 // sum of incoming requests
-    Start int64   // mark of init time
-    Last  int64   // mark of last request time
+    Sum        float64 // sum of incoming requests
+    Start      int64   // mark of init time
+    Last       int64   // mark of last request time
+    incomeFreq int64   // init frequency of incoming requests (milliseconds)
+    speedCheck uint64  // it is parameter to check time interval between incoming requests
 }
 
 // Debug turns on debug mode.
@@ -79,105 +84,97 @@ func Debug(debug bool) {
     loggerDebug = log.New(debugHandle, "DEBUG [hashq]: ", log.Ldate|log.Lmicroseconds|log.Lshortfile)
 }
 
-// Init initializes shared map:
+// New initializes hash table storage.
 //
 // size - a number of shared resources;
 // spch - a parameter to check time interval between incoming requests;
 // cleaner - an interval between attempts to clean resources;
 // older - a resource can be considered obsolete after this interval.
-func Init(share Shared, size int64, spch uint64, cleaner, older time.Duration) error {
+func New(share Shared, size int64, spch uint64, cleaner, older time.Duration) (*HashQ, error) {
     var err error
+    hq := &HashQ{}
     switch {
-        case share == nil:
-            err = fmt.Errorf("can't initializes using nil pointer")
-        case size < 1:
-            err = fmt.Errorf("bad size of shared array")
-        case spch < 1:
-            err = fmt.Errorf("bad parameter for frequency correction")
+    case share == nil:
+        err = fmt.Errorf("can't initializes using nil pointer")
+    case size < 1:
+        err = fmt.Errorf("bad size of shared array")
+    case spch < 1:
+        err = fmt.Errorf("bad parameter for frequency correction")
     }
     if err != nil {
-        return err
+        return hq, err
     }
-    emptyPt = share
-    maxShared, speedCheck, cleanPeriod, olderPeriod = size, spch, cleaner, older
-    SharedMap = make([]*Resource, maxShared)
-    for i := range SharedMap {
-        SharedMap[i] = &Resource{}
-        SharedMap[i].Pt = emptyPt
+    initTime := time.Now().UnixNano()
+    shMap, speed := make([]*Resource, size), &Speed{0, initTime, initTime, incomeFreqTotal, spch}
+    hq = &HashQ{shMap, share, size, cleaner, older, speed}
+    for i := range hq.sharedMap {
+        hq.sharedMap[i] = &Resource{}
+        hq.sharedMap[i].Pt = hq.emptyPt
     }
     go func() {
-        ticker := time.Tick(cleanPeriod)
+        ticker := time.Tick(hq.cleanPeriod)
         for {
             select {
-                case <-ticker:
-                    Clean()
+            case <-ticker:
+                hq.Clean()
             }
         }
     }()
-    InitSpeed()
-    initialized = true
-    return err
-}
-
-// InitSpeed initializes new internal Speed structure.
-// This method should be called before the first requests.
-func InitSpeed() {
-    initTime := time.Now().UnixNano()
-    curSpeed = &Speed{0, initTime, initTime}
+    return hq, nil
 }
 
 // Clean resets unused resources. Only this method can delete shared pointers.
-func Clean() {
-    if !initialized {
+func (hq *HashQ) Clean() {
+    if hq == nil {
         return
     }
     loggerDebug.Println("start Clean()")
     defer loggerDebug.Println("end Clean()")
 
-    for i, res := range SharedMap {
-        if (res.active) && (time.Now().Sub(res.modified) > olderPeriod) {
+    for i, res := range hq.sharedMap {
+        if (res.active) && (time.Now().Sub(res.modified) > hq.olderPeriod) {
             loggerDebug.Printf("try to close %v\n", i)
-            res.Clean(i)
+            res.Clean(hq, i)
         }
     }
 }
 
 // genHash returns a hash index for new incoming request.
-func genHash() int64 {
-    curSpeed.inc()
-    if curSpeed.Check() {
-        if f := curSpeed.Freq(); f != 0 {
-            incomeFreq = f
+func (hq *HashQ) genHash() int64 {
+    hq.curSpeed.inc()
+    if hq.curSpeed.Check() {
+        if f := hq.curSpeed.Freq(); f != 0 {
+            hq.curSpeed.incomeFreq = f
             loggerDebug.Printf("incomeFreq was corrected: %v\n", f)
         }
     }
-    idx := (time.Now().UnixNano() / incomeFreq) % maxShared
+    idx := (time.Now().UnixNano() / hq.curSpeed.incomeFreq) % hq.maxShared
     loggerDebug.Printf("get idx=%v\n", idx)
     return idx
 }
 
 // Get returns a shared resource.
-func Get() (*Resource, error) {
-    if !initialized {
+func (hq *HashQ) Get() (*Resource, error) {
+    if (hq == nil) || (hq.Len() == 0) {
         return nil, fmt.Errorf("configuration is not initialized")
     }
-    idx := genHash()
-    res := SharedMap[idx]
-    loggerDebug.Printf("Get() returned [%v]=%v", idx, &SharedMap[idx])
+    idx := hq.genHash()
+    res := hq.sharedMap[idx]
+    loggerDebug.Printf("Get() returned [%v]=%v", idx, &hq.sharedMap[idx])
     return res, nil
 }
 
 // Stat print statistics for debug mode.
-func Stat() {
+func (hq *HashQ) Stat() {
     loggerDebug.Println("Stat")
-    for i, res := range SharedMap {
+    for i, res := range hq.sharedMap {
         loggerDebug.Printf("\t %v: pt=%v\n", i, res.Pt)
     }
 }
 
 // inc increments counters of Speed structure.
 func (s *Speed) inc() {
-    s.Sum, s.Last = s.Sum + 1, time.Now().UnixNano()
+    s.Sum, s.Last = s.Sum+1, time.Now().UnixNano()
 }
 
 // Freq returns an average frequency of incoming requests
@@ -187,21 +184,22 @@ func (s *Speed) Freq() int64 {
     }
     return (s.Last - s.Start) / int64(s.Sum)
 }
+
 // Check verifies that frequency should be corrected.
 func (s *Speed) Check() bool {
-    return (uint64(s.Sum) % speedCheck) == 1
+    return (uint64(s.Sum) % s.speedCheck) == 1
 }
 
 // Clean resets an unused resource and "closes" shared object.
-func (res *Resource) Clean(i int) {
+func (res *Resource) Clean(hq *HashQ, i int) {
     res.mutex.Lock()
     defer res.mutex.Unlock()
 
     res.Pt.Close()
-    res.Pt, res.open, res.active = emptyPt, sync.Once{}, false
+    res.Pt, res.open, res.active = hq.emptyPt, sync.Once{}, false
     res.touch()
     loggerDebug.Printf("%v is closed\n", i)
-    Stat()
+    hq.Stat()
 }
 
 // Lock implements read-lock for a resource.
