@@ -174,7 +174,7 @@ func (s *Speed) inc() {
     s.Sum, s.Last = s.Sum+1, time.Now().UnixNano()
 }
 
-// Freq returns an average period of incoming requests
+// Period returns an average period of incoming requests
 func (s *Speed) Period() int64 {
     // if s.Sum == 0 {
     //     return 0

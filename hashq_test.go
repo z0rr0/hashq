@@ -64,7 +64,7 @@ func (con *Connection) Close() {
     con.Active = false
 }
 
-func (c *Connection) Ping() error {
+func (con *Connection) Ping() error {
     rand.Seed(time.Now().UnixNano())
     if r := rand.Intn(2); r == 0 {
         // 50 %
