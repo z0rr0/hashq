@@ -21,7 +21,7 @@ import (
 )
 
 const (
-    incomeFreqTotal int64 = 1000000 // milliseconds
+    incomePeriodTotal int64 = 1000000 // 1 ms (nanoseconds)
 )
 
 var (
@@ -56,20 +56,21 @@ type Shared interface {
 // safe handle its operations.
 type Resource struct {
     Pt       Shared
+    parent   *HashQ
     active   bool
     open     sync.Once
     mutex    sync.RWMutex
     modified time.Time
 }
 
-// Speed is structure to calculate average speed and frequency of incoming requests.
+// Speed is structure to calculate average speed and period of incoming requests.
 // It uses probabilistic values, because this works without any locks.
 type Speed struct {
-    Sum        float64 // sum of incoming requests
-    Start      int64   // mark of init time
-    Last       int64   // mark of last request time
-    incomeFreq int64   // init frequency of incoming requests (milliseconds)
-    speedCheck uint64  // it is parameter to check time interval between incoming requests
+    Sum          float64 // sum of incoming requests
+    Start        int64   // mark of init time
+    Last         int64   // mark of last request time
+    incomePeriod int64   // init period of incoming requests (milliseconds)
+    speedCheck   uint64  // it is parameter to check time interval between incoming requests
 }
 
 // Debug turns on debug mode.
@@ -83,6 +84,7 @@ func Debug(debug bool) {
 
 // New initializes hash table storage.
 //
+// share - a empty (closed) shared resource
 // size - a number of shared resources;
 // spch - a parameter to check time interval between incoming requests;
 // cleaner - an interval between attempts to clean resources;
@@ -96,16 +98,17 @@ func New(share Shared, size int64, spch uint64, cleaner, older time.Duration) (*
     case size < 1:
         err = fmt.Errorf("bad size of shared array")
     case spch < 1:
-        err = fmt.Errorf("bad parameter for frequency correction")
+        err = fmt.Errorf("bad parameter for period correction")
     }
     if err != nil {
         return hq, err
     }
     initTime := time.Now().UnixNano()
-    shMap, speed := make([]*Resource, size), &Speed{0, initTime, initTime, incomeFreqTotal, spch}
+    shMap, speed := make([]*Resource, size), &Speed{0, initTime, initTime, incomePeriodTotal, spch}
     hq = &HashQ{shMap, share, size, cleaner, older, speed}
     for i := range hq.sharedMap {
         hq.sharedMap[i] = &Resource{}
+        hq.sharedMap[i].parent = hq
         hq.sharedMap[i].Pt = hq.emptyPt
     }
     go func() {
@@ -113,7 +116,7 @@ func New(share Shared, size int64, spch uint64, cleaner, older time.Duration) (*
         for {
             select {
             case <-ticker:
-                hq.Clean()
+                hq.Clean(false)
             }
         }
     }()
@@ -121,14 +124,14 @@ func New(share Shared, size int64, spch uint64, cleaner, older time.Duration) (*
 }
 
 // Clean resets unused resources. Only this method can delete shared pointers.
-func (hq *HashQ) Clean() {
-    loggerDebug.Println("start Clean()")
-    defer loggerDebug.Println("end Clean()")
+func (hq *HashQ) Clean(forced bool) {
+    loggerDebug.Printf("start Clean(forced=%v)", forced)
+    defer loggerDebug.Printf("end Clean(forced=%v)", forced)
 
     for i, res := range hq.sharedMap {
-        if (res.active) && (time.Now().Sub(res.modified) > hq.olderPeriod) {
+        if (res.active) && (forced || (time.Now().Sub(res.modified) > hq.olderPeriod)) {
             loggerDebug.Printf("try to close %v\n", i)
-            res.Clean(hq, i)
+            res.Clean(i)
         }
     }
 }
@@ -137,12 +140,12 @@ func (hq *HashQ) Clean() {
 func (hq *HashQ) genHash() int64 {
     hq.curSpeed.inc()
     if hq.curSpeed.Check() {
-        if f := hq.curSpeed.Freq(); f != 0 {
-            hq.curSpeed.incomeFreq = f
-            loggerDebug.Printf("incomeFreq was corrected: %v\n", f)
+        if f := hq.curSpeed.Period(); f != 0 {
+            hq.curSpeed.incomePeriod = f
+            loggerDebug.Printf("incoming period was corrected: %v\n", f)
         }
     }
-    idx := (time.Now().UnixNano() / hq.curSpeed.incomeFreq) % hq.maxShared
+    idx := (time.Now().UnixNano() / hq.curSpeed.incomePeriod) % hq.maxShared
     loggerDebug.Printf("get idx=%v\n", idx)
     return idx
 }
@@ -171,29 +174,30 @@ func (s *Speed) inc() {
     s.Sum, s.Last = s.Sum+1, time.Now().UnixNano()
 }
 
-// Freq returns an average frequency of incoming requests
-func (s *Speed) Freq() int64 {
+// Freq returns an average period of incoming requests
+func (s *Speed) Period() int64 {
     // if s.Sum == 0 {
     //     return 0
     // }
     return (s.Last - s.Start) / int64(s.Sum)
 }
 
-// Check verifies that frequency should be corrected.
+// Check verifies that period should be corrected.
 func (s *Speed) Check() bool {
     return (uint64(s.Sum) % s.speedCheck) == 1
 }
 
 // Clean resets an unused resource and "closes" shared object.
-func (res *Resource) Clean(hq *HashQ, i int) {
+// Index i is not important here, and used only for debug.
+func (res *Resource) Clean(i int) {
     res.mutex.Lock()
     defer res.mutex.Unlock()
 
     res.Pt.Close()
-    res.Pt, res.open, res.active = hq.emptyPt, sync.Once{}, false
+    res.Pt, res.open, res.active = res.parent.emptyPt, sync.Once{}, false
     res.touch()
-    loggerDebug.Printf("%v is closed\n", i)
-    hq.Stat()
+    loggerDebug.Printf("%v %v is closed", i, &res)
+    res.parent.Stat()
 }
 
 // Lock implements read-lock for a resource.
@@ -215,6 +219,7 @@ func (res *Resource) touch() {
 }
 
 // TryOpen calls Open() method of shared resource only once.
+// This method can be call only if the resource is locked.
 func (res *Resource) TryOpen() (Shared, error) {
     var err error
     open := func() {

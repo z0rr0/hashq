@@ -45,6 +45,7 @@ type Result struct {
     ID     int64
     Answer int64
     Err    error
+    ExpErr bool
 }
 
 func (con *Connection) Open() (Shared, error) {
@@ -62,33 +63,63 @@ func (con *Connection) Close() {
     con.ID = 0
     con.Active = false
 }
+
+func (c *Connection) Ping() error {
+    rand.Seed(time.Now().UnixNano())
+    if r := rand.Intn(2); r == 0 {
+        // 50 %
+        return fmt.Errorf("random error")
+    }
+    return nil
+}
+
 func (req *Request) Run(t *testing.T, hq *HashQ, result chan Result) {
+    const retries = 3
+    var (
+        con       *Connection
+        sharedCon Shared
+    )
     rand.Seed(time.Now().UnixNano())
     // it is some shared resource
     res, err := hq.Get()
     if err != nil {
         t.Errorf("wrong Get() response")
     }
-    res.Lock()
-    loggerDebug.Printf("run start for %v\n", &res)
+    expErr := false
+    for i := 0; i < retries; i++ {
+        expErr = false
+        res.Lock()
+        sharedCon, err = res.TryOpen()
+        if err == nil {
+            con = sharedCon.(*Connection)
+            err, expErr = con.Ping(), true
+            if err == nil {
+                break
+            }
+        }
+        res.Unlock()
+        res.Clean(-1)
+        // wait reconnect...
+        loggerDebug.Printf("wait reconnect [%v] %v", i, &res)
+    }
+    loggerDebug.Printf("run start for %v - %v\n", &res, err)
     defer func() {
         loggerDebug.Printf("run end for %v\n", &res)
-        res.Unlock()
+        if err == nil {
+            res.Unlock()
+        }
     }()
-
-    sharedCon, err := res.TryOpen()
     if err != nil {
-        result <- Result{0, 0, err}
+        result <- Result{0, 0, err, expErr}
         return
     }
-    con := sharedCon.(*Connection)
     if !con.Active {
         t.Errorf("inactive connection was used")
     }
     salt := time.Duration(rand.Int63n(maxReqTime)) * time.Millisecond
     time.Sleep(minReqTime + salt)
     // loggerDebug.Printf("send to channel: %v-%v", req.ID, con.ID)
-    result <- Result{req.ID, req.ID * con.ID, nil}
+    result <- Result{req.ID, req.ID * con.ID, nil, false}
 }
 func ReqGenerator(req chan Request) {
     rand.Seed(time.Now().UnixNano())
@@ -121,7 +152,7 @@ func TestGet(t *testing.T) {
     if _, err := hq.Get(); err == nil {
         t.Errorf("accept not initialized Get()")
     }
-    hq.Clean()
+    hq.Clean(false)
 }
 
 func TestInit(t *testing.T) {
@@ -149,11 +180,15 @@ func TestInit(t *testing.T) {
         i := 0
         for result := range resultCh {
             // loggerDebug.Printf("result gotten: %v", result)
-            if result.Err != nil {
-                t.Errorf("result error: %v", result.Err)
-            }
-            if result.Answer == 0 {
-                t.Errorf("incorrect answer: %v", result)
+            if result.ExpErr {
+                t.Logf("expexted error %v", result)
+            } else {
+                if result.Err != nil {
+                    t.Errorf("result error: %v", result.Err)
+                }
+                if result.Answer == 0 {
+                    t.Errorf("incorrect answer: %v", result)
+                }
             }
             i++
             if i >= maxRequests {
