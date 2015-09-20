@@ -8,6 +8,13 @@ It contains a storage for some resources. Unused elements will be closed automat
 
 For example, it can be used if there are many incoming requests and every one should read some data from database. So, some shared connections pool can be allocated and used, and we shouldn't control it, **hashq** will store a set and return needed elements using round robin algorithm.
 
+Version 2.0 is not backwards compatible with previous ones. There are following main changes:
+
+* element's interface is changed, it contains methods Close() and CanClose()
+* new HashQ constructor with 3 parameters
+* the pool doesn't control custom locks/unlocks operation and works only as a storage
+* the pool doesn't use time hashing now, the round robing algorithm is used
+
 ```go
 var (
     poolSize int64 = 128              // storage size
@@ -17,8 +24,10 @@ var (
 type Connection struct {
 	// some fields
 }
-// can return always true if it isn't needed
+// CanClose can return always true if it isn't needed
+// it only skip used elements without locks.
 func (con *Connection) CanClose() bool {...}
+// Close should contain all needed locks/unlocks.
 func (con *Connection) Close() {...}
 
 pool := New(poolSzie, &Connection{}, false)
