@@ -19,6 +19,7 @@ Version 2.0 is not backwards compatible with previous ones. There are following 
 var (
     poolSize int64 = 128              // storage size
     cleanPeriod    = 90 * time.Second // Clean() function will be called after this period
+    waitAfterClose = 1 * time.Second  // wait this period after connection close
 )
 
 type Connection struct {
@@ -31,7 +32,7 @@ func (con *Connection) CanClose() bool {...}
 func (con *Connection) Close() {...}
 
 // create new pool
-pool := New(poolSzie, &Connection{}, false)
+pool := New(poolSzie, &Connection{}, 0, false)
 ch, errc := make(chan Shared), make(chan error)
 // the pool will send new elements to channel ch
 go pool.Produce(ch, ec)
