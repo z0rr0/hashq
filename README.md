@@ -25,7 +25,7 @@ type Connection struct {
 	// some fields
 }
 // CanClose can return always true if it isn't needed
-// it only skip used elements without locks.
+// it is only to skip used elements without locks.
 func (con *Connection) CanClose() bool {...}
 // Close should contain all needed locks/unlocks.
 func (con *Connection) Close() {...}
