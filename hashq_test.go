@@ -19,7 +19,7 @@ const (
 
 var (
     maxRequests          = 512
-    cleanPeriod          = 15 * time.Millisecond
+    cleanPeriod          = 20 * time.Millisecond
     maxTaskDelay   int64 = 10 // time.Millisecond
     delayCreation  int64 = 4  // time.Millisecond
     waitAfterClose       = 1 * time.Microsecond
@@ -29,6 +29,10 @@ type Conn struct {
     ID    int
     mutex sync.RWMutex
     one   sync.Once
+}
+
+func (c *Conn) New() Shared {
+    return &Conn{}
 }
 
 func (c *Conn) Close(d time.Duration) {
@@ -48,6 +52,7 @@ func (c *Conn) CanClose() bool {
 
 func (c *Conn) Open(v int) {
     c.mutex.RLock()
+    // loggerDebug.Printf("locked %p", c)
     f := func() {
         c.ID += v
     }
@@ -56,6 +61,7 @@ func (c *Conn) Open(v int) {
 
 func (c *Conn) Release() {
     c.mutex.RUnlock()
+    // loggerDebug.Printf("unlocked %p", c)
 }
 
 func GetConn(v int, ch <-chan Shared) *Conn {
@@ -72,6 +78,7 @@ func delay(d int64) {
 
 func Task(ch chan Shared, result chan *Conn) {
     rand.Seed(time.Now().UnixNano())
+    delay(maxTaskDelay)
     conn := GetConn(rand.Intn(maxVal-1)+1, ch)
     // defer conn.Release()
     delay(maxTaskDelay)

@@ -29,6 +29,7 @@ var (
 
 // Shared is an interface of a shared resource.
 type Shared interface {
+    New() Shared
     CanClose() bool
     Close(d time.Duration)
 }
@@ -56,10 +57,10 @@ func New(size int, e Shared, d time.Duration, debug bool) *HashQ {
     defer h.mutex.Unlock()
     // create a pool with initial elements
     for i := 0; i < size; i++ {
-        h.pool = append(h.pool, h.empty)
+        h.pool = append(h.pool, h.empty.New())
     }
     Debug(debug)
-    loggerDebug.Printf("new created a pool [%v]", size)
+    loggerDebug.Printf("New created a pool [%v]", size)
     return h
 }
 
@@ -74,7 +75,6 @@ func (h *HashQ) Size() int {
 // The channel can be buffered to exclude a bottle neck here.
 func (h *HashQ) Produce(sch chan<- Shared, errch chan error) {
     if h.Size() == 0 {
-        loggerError.Println("pool is empty")
         errch <- errors.New("empty pool")
         return
     }
@@ -89,16 +89,17 @@ func (h *HashQ) Produce(sch chan<- Shared, errch chan error) {
 // Monitor closes unused connections with period d.
 func (h *HashQ) Monitor(d time.Duration) {
     clean := func() {
-        loggerDebug.Printf("run connection clean, size=~%v", h.Size())
+        loggerDebug.Printf("run connection clean, size=%v", h.Size())
         h.mutex.RLock()
         defer h.mutex.RUnlock()
-        i := 0
+        j := 0
         for _, s := range h.pool {
             if s.CanClose() {
                 s.Close(h.closeWait)
+                j++
             }
         }
-        loggerDebug.Printf("end connection clean, num=%v", i)
+        loggerDebug.Printf("end connection clean, num=%v", j)
     }
     for {
         select {

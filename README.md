@@ -25,6 +25,9 @@ var (
 type Connection struct {
 	// some fields
 }
+// to initialize the pool by initial values
+// often, it empty structure or its pointer
+func (con *Connection) New() Shared {...}
 // CanClose can return always true if it isn't needed
 // it is only to skip used elements without locks.
 func (con *Connection) CanClose() bool {...}
