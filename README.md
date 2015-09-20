@@ -30,16 +30,22 @@ func (con *Connection) CanClose() bool {...}
 // Close should contain all needed locks/unlocks.
 func (con *Connection) Close() {...}
 
+// create new pool
 pool := New(poolSzie, &Connection{}, false)
 ch, errc := make(chan Shared), make(chan error)
+// the pool will send new elements to channel ch
 go pool.Produce(ch, ec)
-
+// check that Producer is started without any errors
 if err := <-errc; err == nil {
     panic(err)
 }
+// Monitor will periodically call CanClose+Close
+// for each element in the pool
 go pool.Monitor(cleanPeriod)
+// get element
 sh := <-ch
 conn := sh.(*Connection)
+// use conn...
 ```
 
 ### Dependencies
