@@ -18,10 +18,11 @@ const (
 )
 
 var (
-    maxRequests         = 512
-    cleanPeriod         = 15 * time.Millisecond
-    maxTaskDelay  int64 = 10 // time.Millisecond
-    delayCreation int64 = 4  // time.Millisecond
+    maxRequests          = 512
+    cleanPeriod          = 15 * time.Millisecond
+    maxTaskDelay   int64 = 10 // time.Millisecond
+    delayCreation  int64 = 4  // time.Millisecond
+    waitAfterClose       = 1 * time.Microsecond
 )
 
 type Conn struct {
@@ -30,7 +31,7 @@ type Conn struct {
     one   sync.Once
 }
 
-func (c *Conn) Close() {
+func (c *Conn) Close(d time.Duration) {
     c.mutex.Lock()
     defer c.mutex.Unlock()
     // it is only example
@@ -38,6 +39,7 @@ func (c *Conn) Close() {
         c.ID = 0
         c.one = sync.Once{}
     }
+    time.Sleep(d)
 }
 
 func (c *Conn) CanClose() bool {
@@ -78,7 +80,7 @@ func Task(ch chan Shared, result chan *Conn) {
 
 func TestNew(t *testing.T) {
     e := &Conn{}
-    pool := New(-1, e, true)
+    pool := New(-1, e, waitAfterClose, true)
     if pool == nil {
         t.Errorf("incorrect behavior")
         return
@@ -89,7 +91,7 @@ func TestNew(t *testing.T) {
         t.Errorf("incorrect behavior")
         return
     }
-    pool = New(poolSize, e, true)
+    pool = New(poolSize, e, waitAfterClose, true)
     go pool.Produce(ch, ec)
     if err := <-ec; err != nil {
         t.Errorf("invalid state: %v", err)

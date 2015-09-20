@@ -30,14 +30,15 @@ var (
 // Shared is an interface of a shared resource.
 type Shared interface {
     CanClose() bool
-    Close()
+    Close(d time.Duration)
 }
 
 // HashQ is a hash storage.
 type HashQ struct {
-    pool  []Shared
-    empty Shared
-    mutex sync.RWMutex
+    pool      []Shared
+    empty     Shared
+    closeWait time.Duration
+    mutex     sync.RWMutex
 }
 
 // Debug turns on debug mode.
@@ -49,8 +50,8 @@ func Debug(debug bool) {
     loggerDebug = log.New(debugHandle, "DEBUG [hashq]: ", log.Ldate|log.Lmicroseconds|log.Lshortfile)
 }
 
-func New(size int, e Shared, debug bool) *HashQ {
-    h := &HashQ{empty: e}
+func New(size int, e Shared, d time.Duration, debug bool) *HashQ {
+    h := &HashQ{empty: e, closeWait: d}
     h.mutex.Lock()
     defer h.mutex.Unlock()
     // create a pool with initial elements
@@ -94,7 +95,7 @@ func (h *HashQ) Monitor(d time.Duration) {
         i := 0
         for _, s := range h.pool {
             if s.CanClose() {
-                s.Close()
+                s.Close(h.closeWait)
             }
         }
         loggerDebug.Printf("end connection clean, num=%v", i)
