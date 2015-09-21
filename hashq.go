@@ -50,6 +50,7 @@ func Debug(debug bool) {
     loggerDebug = log.New(debugHandle, "DEBUG [hashq]: ", log.Ldate|log.Lmicroseconds|log.Lshortfile)
 }
 
+// New creates a pool of Shared objects.
 func New(size int, e Shared, d time.Duration, debug bool) *HashQ {
     h := &HashQ{closeWait: d}
     h.mutex.Lock()
