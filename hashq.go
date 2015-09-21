@@ -37,7 +37,6 @@ type Shared interface {
 // HashQ is a hash storage.
 type HashQ struct {
     pool      []Shared
-    empty     Shared
     closeWait time.Duration
     mutex     sync.RWMutex
 }
@@ -52,12 +51,12 @@ func Debug(debug bool) {
 }
 
 func New(size int, e Shared, d time.Duration, debug bool) *HashQ {
-    h := &HashQ{empty: e, closeWait: d}
+    h := &HashQ{closeWait: d}
     h.mutex.Lock()
     defer h.mutex.Unlock()
     // create a pool with initial elements
     for i := 0; i < size; i++ {
-        h.pool = append(h.pool, h.empty.New())
+        h.pool = append(h.pool, e.New())
     }
     Debug(debug)
     loggerDebug.Printf("New created a pool [%v]", size)
