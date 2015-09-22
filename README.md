@@ -35,7 +35,7 @@ func (con *Connection) CanClose() bool {...}
 func (con *Connection) Close() {...}
 
 // create new pool
-pool := New(poolSzie, &Connection{}, 0, false)
+pool := New(poolSzie, &Connection{}, 0)
 ch, errc := make(chan Shared), make(chan error)
 // the pool will send new elements to channel ch
 go pool.Produce(ch, ec)
@@ -43,7 +43,7 @@ go pool.Produce(ch, ec)
 if err := <-errc; err == nil {
     panic(err)
 }
-// Monitor will periodically call CanClose+Close
+// Monitor can be periodically called to run CanClose+Close
 // for each element in the pool
 go pool.Monitor(cleanPeriod)
 // get element
