@@ -31,9 +31,11 @@ var (
 
 // Shared is an interface of a shared resource.
 type Shared interface {
+    // New crates new object for the pool
     New() Shared
-    CanClose() bool
-    Close(d time.Duration)
+    // Close tries to close an object
+    // and returns true if it did it.
+    Close(d time.Duration) bool
 }
 
 // HashQ is a hash storage.
@@ -95,8 +97,7 @@ func (h *HashQ) Monitor(d time.Duration) {
         defer h.mutex.RUnlock()
         j := 0
         for _, s := range h.pool {
-            if s.CanClose() {
-                s.Close(h.closeWait)
+            if s.Close(h.closeWait) {
                 j++
             }
         }

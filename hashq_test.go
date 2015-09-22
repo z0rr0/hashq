@@ -5,7 +5,6 @@
 package hashq
 
 import (
-    // "fmt"
     "math/rand"
     "sync"
     "testing"
@@ -18,9 +17,9 @@ const (
 )
 
 var (
-    maxRequests          = 1024
-    cleanPeriod          = 8 * time.Millisecond
-    maxTaskDelay   int64 = 32 // time.Millisecond
+    maxRequests          = 512
+    cleanPeriod          = 30 * time.Millisecond
+    maxTaskDelay   int64 = 10 // time.Millisecond
     delayCreation  int64 = 4  // time.Millisecond
     waitAfterClose       = 1 * time.Microsecond
 )
@@ -35,19 +34,18 @@ func (c *Conn) New() Shared {
     return &Conn{}
 }
 
-func (c *Conn) Close(d time.Duration) {
+func (c *Conn) Close(d time.Duration) bool {
     c.mutex.Lock()
     defer c.mutex.Unlock()
     // it is only example
-    if c.ID != 0 {
-        c.ID = 0
-        c.one = sync.Once{}
+    if c.ID == 0 {
+        return false
     }
-    time.Sleep(d)
-}
-
-func (c *Conn) CanClose() bool {
-    return c.ID != 0
+    c.ID, c.one = 0, sync.Once{}
+    if d != 0 {
+        time.Sleep(d)
+    }
+    return true
 }
 
 func (c *Conn) Open(v int) {
@@ -133,5 +131,5 @@ func TestNew(t *testing.T) {
         go Task(ch, result)
     }
     t.Logf("all %v tasks finished", <-stop)
-    defer time.Sleep(cleanPeriod)
+    time.Sleep(cleanPeriod)
 }
