@@ -23,6 +23,8 @@ import (
 var (
     // loggerError implements error logger.
     loggerError = log.New(os.Stderr, "ERROR [hashq]: ", log.Ldate|log.Ltime|log.Lshortfile)
+    // loggerInfo is info logger.
+    loggerInfo = log.New(os.Stdout, "INFO [hashq]: ", log.Ldate|log.Ltime|log.Lshortfile)
     // loggerDebug implements debug logger, it's disabled by default.
     loggerDebug = log.New(ioutil.Discard, "DEBUG [hashq]: ", log.Ldate|log.Lmicroseconds|log.Lshortfile)
 )
@@ -51,7 +53,7 @@ func Debug(debug bool) {
 }
 
 // New creates a pool of Shared objects.
-func New(size int, e Shared, d time.Duration, debug bool) *HashQ {
+func New(size int, e Shared, d time.Duration) *HashQ {
     h := &HashQ{closeWait: d}
     h.mutex.Lock()
     defer h.mutex.Unlock()
@@ -59,8 +61,7 @@ func New(size int, e Shared, d time.Duration, debug bool) *HashQ {
     for i := 0; i < size; i++ {
         h.pool = append(h.pool, e.New())
     }
-    Debug(debug)
-    loggerDebug.Printf("New created a pool [%v]", size)
+    loggerInfo.Printf("new pools was created with a size %v", size)
     return h
 }
 
@@ -86,10 +87,10 @@ func (h *HashQ) Produce(sch chan<- Shared, errch chan error) {
     }
 }
 
-// Monitor closes unused connections with period d.
+// Monitor closes unused objects with period d.
 func (h *HashQ) Monitor(d time.Duration) {
     clean := func() {
-        loggerDebug.Printf("run connection clean, size=%v", h.Size())
+        loggerDebug.Printf("run monitoring clean, size=%v", h.Size())
         h.mutex.RLock()
         defer h.mutex.RUnlock()
         j := 0
@@ -99,7 +100,7 @@ func (h *HashQ) Monitor(d time.Duration) {
                 j++
             }
         }
-        loggerDebug.Printf("end connection clean, num=%v", j)
+        loggerDebug.Printf("end monitoring clean, %v objects were closed", j)
     }
     for {
         select {

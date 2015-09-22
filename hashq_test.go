@@ -18,9 +18,9 @@ const (
 )
 
 var (
-    maxRequests          = 512
-    cleanPeriod          = 20 * time.Millisecond
-    maxTaskDelay   int64 = 10 // time.Millisecond
+    maxRequests          = 1024
+    cleanPeriod          = 8 * time.Millisecond
+    maxTaskDelay   int64 = 32 // time.Millisecond
     delayCreation  int64 = 4  // time.Millisecond
     waitAfterClose       = 1 * time.Microsecond
 )
@@ -86,8 +86,9 @@ func Task(ch chan Shared, result chan *Conn) {
 }
 
 func TestNew(t *testing.T) {
+    Debug(true)
     e := &Conn{}
-    pool := New(-1, e, waitAfterClose, true)
+    pool := New(-1, e, waitAfterClose)
     if pool == nil {
         t.Errorf("incorrect behavior")
         return
@@ -98,7 +99,7 @@ func TestNew(t *testing.T) {
         t.Errorf("incorrect behavior")
         return
     }
-    pool = New(poolSize, e, waitAfterClose, true)
+    pool = New(poolSize, e, waitAfterClose)
     go pool.Produce(ch, ec)
     if err := <-ec; err != nil {
         t.Errorf("invalid state: %v", err)
@@ -109,7 +110,7 @@ func TestNew(t *testing.T) {
     go func() {
         j := 0
         for c := range result {
-            // loggerDebug.Printf("con=%v", c)
+            // loggerDebug.Printf("con=%p, id=%v", c, c.ID)
             switch {
             case c.ID < 1:
                 t.Errorf("wrong value: %v %v", c.ID, c)
@@ -120,6 +121,9 @@ func TestNew(t *testing.T) {
             j++
             if j >= maxRequests {
                 close(result)
+            }
+            if j%50 == 0 {
+                loggerDebug.Printf("%v task competed", j)
             }
         }
         stop <- j
