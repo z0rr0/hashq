@@ -39,6 +39,7 @@ func (c *Conn) Close(d time.Duration) bool {
     defer c.mutex.Unlock()
     // it is only example
     if c.ID == 0 {
+        c.one = sync.Once{}
         return false
     }
     c.ID, c.one = 0, sync.Once{}
