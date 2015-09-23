@@ -91,22 +91,20 @@ func (h *HashQ) Produce(sch chan<- Shared, errch chan error) {
 
 // Monitor closes unused objects with period d.
 func (h *HashQ) Monitor(d time.Duration) {
-    clean := func() {
-        loggerDebug.Printf("run monitoring clean, size=%v", h.Size())
-        h.mutex.RLock()
-        defer h.mutex.RUnlock()
-        j := 0
-        for _, s := range h.pool {
-            if s.Close(h.closeWait) {
-                j++
-            }
-        }
-        loggerDebug.Printf("end monitoring clean, %v objects were closed", j)
-    }
+    var i int
     for {
         select {
         case <-time.After(d):
-            clean()
+            h.mutex.RLock()
+            loggerDebug.Printf("run monitoring clean, size=%v", len(h.pool))
+            i = 0
+            for _, s := range h.pool {
+                if s.Close(h.closeWait) {
+                    i++
+                }
+            }
+            loggerDebug.Printf("end monitoring clean, %v objects were closed", i)
+            h.mutex.RUnlock()
         }
     }
 }

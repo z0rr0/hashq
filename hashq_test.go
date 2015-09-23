@@ -103,6 +103,8 @@ func TestNew(t *testing.T) {
     if err := <-ec; err != nil {
         t.Errorf("invalid state: %v", err)
         return
+    } else {
+        t.Logf("new pool was successfully created with a size=%v", pool.Size())
     }
     go pool.Monitor(cleanPeriod)
     stop, result := make(chan int), make(chan *Conn, 2)
